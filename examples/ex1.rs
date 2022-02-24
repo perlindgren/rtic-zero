@@ -2,7 +2,8 @@ use rtic_zero::*;
 
 // auto generated
 static R1: Resource<u32, 1> = Resource::new(5);
-static R2: Resource<u32, 2> = Resource::new(500);
+static R2A: Resource<u32, 2> = Resource::new(500);
+static R2B: Resource<u32, 2> = Resource::new(1000);
 
 fn inc(r: &mut Mutex<u32, 1>) {
     println!(
@@ -34,7 +35,7 @@ fn gen<const CEIL: u8>(r: &mut Mutex<u32, CEIL>) {
     );
 }
 
-fn two(r1: &mut Mutex<u32, 1>, r2: &mut Mutex<u32, 1>) {
+fn two<const CEIL1: u8, const CEIL2: u8>(r1: &mut Mutex<u32, CEIL1>, r2: &mut Mutex<u32, CEIL2>) {
     println!("two");
     r1.lock(|v| {
         println!("v {}", *v);
@@ -58,14 +59,19 @@ mod some_external_code {
 }
 
 fn main() {
-    let mut m = unsafe { Mutex::new(&R1) };
-    let mut m2 = unsafe { Mutex::new(&R2) };
+    let priority = unsafe { Priority::new(0) };
+    let mut m1 = unsafe { Mutex::new(&R1, &priority) };
+    let mut m2a = unsafe { Mutex::new(&R2A, &priority) };
+    let mut m2b = unsafe { Mutex::new(&R2B, &priority) };
     let f_array = [inc, dec, gen, some_external_code::gen];
 
     for f in f_array {
-        f(&mut m);
+        f(&mut m1);
     }
 
-    gen(&mut m2);
-    // two(&mut m, &mut m); // cannot point to the same Mutex proxy
+    two(&mut m1, &mut m2a); // cannot point to the same Mutex proxy
+    println!("priority {}", priority.get());
+
+    two(&mut m2a, &mut m2b); // cannot point to the same Mutex proxy
+    println!("priority {}", priority.get());
 }
