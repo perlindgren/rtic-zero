@@ -48,11 +48,8 @@ mod tests {
     fn serde() {
         let task_set = task_set();
 
-        println!("task_set {:?}", task_set);
         let serialized = serde_json::to_string(&task_set).unwrap();
-        println!("task_set {:?}", serialized);
         let deserialized: TaskSet = serde_json::from_str(&serialized).unwrap();
-        println!("deserialized = {:?}", deserialized);
         assert_eq!(task_set, deserialized);
     }
 
