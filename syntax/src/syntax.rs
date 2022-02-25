@@ -14,7 +14,7 @@ pub struct Task {
 
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
 pub struct Init {
-    pub locals: Vec<ResourceInit>,
+    pub local: Vec<ResourceInit>,
     pub late: (), // To be determined
 }
 
@@ -72,7 +72,7 @@ pub fn task_set() -> TaskSet {
         shared: vec![],
         local: vec![],
         init: Init {
-            locals: vec![],
+            local: vec![],
             late: (),
         },
         tasks: vec![

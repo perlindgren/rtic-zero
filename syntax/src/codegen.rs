@@ -1,22 +1,8 @@
 use crate::syntax::*;
+use std::str::FromStr;
 
-// fn gen_task_set(task_set: &TaskSet) {
-//     let mut gen = String::new();
-//     gen.push(gen_init(&task_set.init));
-//     gen_idle(&task_set.idle);
-
-//     for i in task_set.tasks {
-//         gen_task();
-//     }
-// }
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::quote;
-
-fn gen_init(init: &Init) -> String {
-    "mod init {
-    }"
-    .into()
-}
 
 fn ident(i: &str) -> Ident {
     Ident::new(i, Span::call_site())
@@ -44,16 +30,32 @@ fn local(resources: &Vec<ResourceInit>) -> Vec<TokenStream> {
         .collect()
 }
 
-use std::str::FromStr;
-fn gen_task(task: &Task) -> String {
+fn gen_init(init: &Init) -> TokenStream {
+    let local: Vec<_> = local(&init.local);
+
+    quote! {
+        mod init {
+
+            pub struct Local {
+                #(#local),*
+            }
+
+            pub struct Context {
+                local: Local,
+            }
+        }
+    }
+}
+
+fn gen_task(task: &Task) -> TokenStream {
     let id = ident(&task.id);
 
     let shared = shared(&task.shared);
 
     let local: Vec<_> = local(&task.local);
 
-    let q = quote! {
-        pub mod #id {
+    quote! {
+        mod #id {
             pub struct Shared {
                 #(#shared),*
             }
@@ -65,8 +67,27 @@ fn gen_task(task: &Task) -> String {
                 local: Local,
             }
         }
-    };
-    q.to_string()
+    }
+}
+
+fn gen_task_set(task_set: &TaskSet) -> TokenStream {
+    let mut tasks = vec![];
+
+    // gen.push(gen_init(&task_set.init));
+    // gen_idle(&task_set.idle);
+
+    for task in &task_set.tasks {
+        tasks.push(gen_task(task));
+    }
+
+    quote! {
+        use 
+        mod app {
+
+            #(#tasks)*
+
+        }
+    }
 }
 
 #[cfg(test)]
@@ -79,7 +100,7 @@ mod test {
     #[test]
     fn test_gen_task() {
         let task_set = task_set();
-        let s = gen_task(&task_set.tasks[0]);
+        let s = gen_task_set(&task_set);
 
         let path = Path::new("out.rs");
         let display = path.display();
@@ -88,7 +109,7 @@ mod test {
             Ok(file) => file,
         };
 
-        match file.write_all(s.as_bytes()) {
+        match file.write_all(s.to_string().as_bytes()) {
             Err(why) => panic!("couldn't write to {}: {}", display, why),
             Ok(_) => println!("successfully wrote to {}", display),
         }

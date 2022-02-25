@@ -9,4 +9,4 @@ edition = "2021"
 
 [workspace]
 
-members = ["syntax"]
+members = ["syntax", "app"]

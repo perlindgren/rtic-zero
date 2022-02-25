@@ -1,4 +1,4 @@
-use rtic_zero::*;
+use rtic_zero::export::*;
 
 // auto generated
 static R1: Resource<u32, 1> = Resource::new(5);
@@ -46,7 +46,7 @@ fn two<const CEIL1: u8, const CEIL2: u8>(r1: &mut Mutex<u32, CEIL1>, r2: &mut Mu
 }
 
 mod some_external_code {
-    use rtic_zero::*;
+    use rtic_zero::export::*;
     pub fn gen<const CEIL: u8>(r: &mut Mutex<u32, CEIL>) {
         println!(
             "external gen {}",
