@@ -30,26 +30,7 @@ fn shared(resources: &Vec<Resource>) -> Vec<TokenStream> {
 //         .collect()
 // }
 
-use proc_macro2::LexError;
-fn local(resources: &Vec<ResourceInit>) -> Result<TokenStream, LexError> {
-    // let ty_fields: Vec<_> = resources
-    //     .iter()
-    //     .map(|ResourceInit { id, ty, .. }| {
-    //         let id = ident(id);
-    //         let ty = TokenStream::from_str(ty).unwrap();
-    //         quote! { #id: &mut #ty }
-    //     })
-    //     .collect();
-
-    // let imp_fields: Vec<_> = resources
-    //     .iter()
-    //     .map(|ResourceInit { id, value, .. }| {
-    //         let id = ident(id);
-    //         let value = TokenStream::from_str(value).unwrap();
-    //         quote! { #id: &mut #value }
-    //     })
-    //     .collect();
-
+fn local(resources: &Vec<ResourceInit>) -> TokenStream {
     let (field_ty, (field_cell, field_new)): (Vec<_>, (Vec<_>, Vec<_>)) = resources
         .iter()
         .map(|ResourceInit { id, ty, value }| {
@@ -67,7 +48,8 @@ fn local(resources: &Vec<ResourceInit>) -> Result<TokenStream, LexError> {
         })
         .unzip();
 
-    Ok(quote! {
+    quote! {
+        #[allow(non_upper_case_globals)]
         #(#field_cell);*;
 
         pub struct Local<'a> {
@@ -82,11 +64,11 @@ fn local(resources: &Vec<ResourceInit>) -> Result<TokenStream, LexError> {
             }
         }
 
-    })
+    }
 }
 
-fn gen_init(init: &Init, rtp: &ResourceToPriority) -> TokenStream {
-    let local = local(&init.local).unwrap();
+fn gen_init(init: &Init) -> TokenStream {
+    let local = local(&init.local);
 
     quote! {
 
@@ -113,14 +95,34 @@ fn gen_init(init: &Init, rtp: &ResourceToPriority) -> TokenStream {
     }
 }
 
+fn gen_idle(idle: &Idle, rtp: &ResourceToPriority) -> TokenStream {
+    let local = local(&idle.local);
+
+    quote! {
+
+        pub mod idle {
+
+            use super::*;
+
+            #local
+
+            pub struct Context<'a> {
+                pub local: Local<'a>,
+            }
+
+            pub unsafe fn run() {
+                init(Context {
+                    local: Local::new(),
+                });
+            }
+        }
+    }
+}
+
 fn gen_task(task: &Task, rtp: &ResourceToPriority) -> TokenStream {
     let id = ident(&task.id);
-
     let shared = shared(&task.shared);
-
-    let local = local(&task.local).unwrap();
-
-    // let local_resources = local_resources(&task.local);
+    let local = local(&task.local);
 
     quote! {
         mod #id {
@@ -144,7 +146,12 @@ use crate::analysis::ResourceToPriority;
 
 fn gen_task_set(task_set: &TaskSet, rtp: &ResourceToPriority) -> TokenStream {
     let mut tasks = vec![];
-    let init = gen_init(&task_set.init, rtp);
+    let init = gen_init(&task_set.init);
+
+    let idle = match &task_set.idle {
+        Some(idle) => gen_idle(idle, rtp),
+        None => quote! {},
+    };
 
     // gen.push(gen_init(&task_set.init));
     // gen_idle(&task_set.idle);
@@ -158,7 +165,7 @@ fn gen_task_set(task_set: &TaskSet, rtp: &ResourceToPriority) -> TokenStream {
         use mutex::Mutex;
         use rtic_zero::racy_cell::RacyCell;
 
-        use cortex_m_semihosting::{debug, hprintln};
+        use cortex_m_semihosting::hprintln;
 
         #[no_mangle]
         unsafe extern "C" fn main() -> ! {
@@ -173,6 +180,8 @@ fn gen_task_set(task_set: &TaskSet, rtp: &ResourceToPriority) -> TokenStream {
          //#(#tasks)*
 
         #init
+
+        #idle
     }
 }
 
