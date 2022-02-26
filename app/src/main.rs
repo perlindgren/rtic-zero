@@ -13,5 +13,17 @@ use cortex_m_semihosting::{debug, hprintln};
 
 #[no_mangle]
 fn init(cx: init::Context) {
-    hprintln!("init");
+    hprintln!("init {} {}", cx.local.a, cx.local.b).ok();
+    *cx.local.a += 1;
+    *cx.local.b += 1;
+}
+
+#[no_mangle]
+fn idle(cx: idle::Context) {
+    hprintln!("idle {} {}", cx.local.a, cx.local.b).ok();
+    *cx.local.a += 1;
+    *cx.local.b += 1;
+    hprintln!("idle {} {}", cx.local.a, cx.local.b).ok();
+
+    debug::exit(debug::EXIT_SUCCESS);
 }

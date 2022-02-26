@@ -30,48 +30,85 @@ fn shared(resources: &Vec<Resource>) -> Vec<TokenStream> {
 //         .collect()
 // }
 
-fn local(resources: &Vec<ResourceInit>) -> TokenStream {
+use proc_macro2::LexError;
+fn local(resources: &Vec<ResourceInit>) -> Result<TokenStream, LexError> {
+    // let ty_fields: Vec<_> = resources
+    //     .iter()
+    //     .map(|ResourceInit { id, ty, .. }| {
+    //         let id = ident(id);
+    //         let ty = TokenStream::from_str(ty).unwrap();
+    //         quote! { #id: &mut #ty }
+    //     })
+    //     .collect();
 
-    
-    let ty_fields: Vec<_> = resources
+    // let imp_fields: Vec<_> = resources
+    //     .iter()
+    //     .map(|ResourceInit { id, value, .. }| {
+    //         let id = ident(id);
+    //         let value = TokenStream::from_str(value).unwrap();
+    //         quote! { #id: &mut #value }
+    //     })
+    //     .collect();
+
+    let (field_ty, (field_cell, field_new)): (Vec<_>, (Vec<_>, Vec<_>)) = resources
         .iter()
-        .map(|ResourceInit { id, ty, .. }| {
+        .map(|ResourceInit { id, ty, value }| {
             let id = ident(id);
+            let id_internal = ident(&format!("__rtic_internal_{}", id));
             let ty = TokenStream::from_str(ty).unwrap();
-            quote! { #id: &mut #ty }
-        })
-        .collect();
-
-    let imp_fields: Vec<_> = resources
-        .iter()
-        .map(|ResourceInit { id, value, .. }| {
-            let id = ident(id);
             let value = TokenStream::from_str(value).unwrap();
-            quote! { #id: &mut #value }
+            (
+                quote! { #id: &'a mut #ty },
+                (
+                    quote! { static #id_internal: RacyCell<#ty> = RacyCell::new(#value) },
+                    quote! { #id: &mut *#id_internal.get_mut() },
+                ),
+            )
         })
-        .collect();
+        .unzip();
 
-    quote! {
-        pub struct Local {
-            #(#ty_fields),*
+    Ok(quote! {
+        #(#field_cell);*;
+
+        pub struct Local<'a> {
+            #(#field_ty),*
         }
 
-        impl Local {
-            fn new() -> Self {
-                Local {
-                    #(#imp_fields),*
+        impl<'a> Local<'a> {
+             pub unsafe fn new() -> Self {
+                Self {
+                    #(#field_new),*
                 }
             }
         }
-    }
+
+    })
 }
 
 fn gen_init(init: &Init, rtp: &ResourceToPriority) -> TokenStream {
-    let local = local(&init.local);
+    let local = local(&init.local).unwrap();
 
     quote! {
-        mod init {
-           #local
+
+        pub mod init {
+
+            use super::*;
+
+            #local
+
+            pub struct Context<'a> {
+                pub local: Local<'a>,
+            }
+
+            pub unsafe fn run() {
+                init(Context {
+                    local: Local::new(),
+                });
+            }
+
+            extern "Rust" {
+                fn init(cx: Context);
+            }
         }
     }
 }
@@ -81,12 +118,14 @@ fn gen_task(task: &Task, rtp: &ResourceToPriority) -> TokenStream {
 
     let shared = shared(&task.shared);
 
-    let local = local(&task.local);
+    let local = local(&task.local).unwrap();
 
     // let local_resources = local_resources(&task.local);
 
     quote! {
         mod #id {
+            use super::*;
+
             pub struct Shared {
                 #(#shared),*
             }
@@ -115,14 +154,25 @@ fn gen_task_set(task_set: &TaskSet, rtp: &ResourceToPriority) -> TokenStream {
     }
 
     quote! {
-        mod app {
-            use rtic::export::*;
+        use crate::rtic_arch::{MutexProxy, Resource};
+        use mutex::Mutex;
+        use rtic_zero::racy_cell::RacyCell;
 
-            //#(#tasks)*
+        use cortex_m_semihosting::{debug, hprintln};
 
-            #init
+        #[no_mangle]
+        unsafe extern "C" fn main() -> ! {
+            hprintln!("main").ok();
 
+             init::run();
+
+             debug::exit(debug::EXIT_SUCCESS);
+            loop {}
         }
+
+         //#(#tasks)*
+
+        #init
     }
 }
 

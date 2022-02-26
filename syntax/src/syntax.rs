@@ -43,6 +43,32 @@ pub struct TaskSet {
 
 #[cfg(test)]
 pub fn task_set() -> TaskSet {
+    let ri1 = ResourceInit {
+        id: "a".into(),
+        ty: "u32".into(),
+        value: "32".into(),
+    };
+
+    let ri2 = ResourceInit {
+        id: "b".into(),
+        ty: "u64".into(),
+        value: "64".into(),
+    };
+
+    TaskSet {
+        device: "some_dev".into(),
+        shared: vec![],
+        local: vec![],
+        init: Init {
+            local: vec![ri1.clone(), ri2.clone()],
+            late: (),
+        },
+        tasks: vec![],
+    }
+}
+
+#[cfg(test)]
+pub fn task_set2() -> TaskSet {
     let r1 = Resource {
         id: "r1".into(),
         ty: "Special<u32>".into(),
