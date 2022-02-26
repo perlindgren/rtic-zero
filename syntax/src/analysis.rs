@@ -4,7 +4,20 @@ use std::collections::HashMap;
 
 pub type ResourceToPriority = HashMap<Resource, u8>;
 
-pub fn resource_ceiling(tasks: &Vec<Task>) -> ResourceToPriority {
+pub fn resource_ceiling(task_set: &TaskSet) -> ResourceToPriority {
+    let mut tasks = task_set.tasks.clone();
+
+    if let Some(idle) = &task_set.idle {
+        tasks.push({
+            Task {
+                id: "idle".into(),
+                priority: 0,
+                binds: None,
+                shared: idle.shared.clone(),
+                local: vec![],
+            }
+        })
+    }
     let mut rtp = ResourceToPriority::new();
 
     for t in tasks {
@@ -25,6 +38,6 @@ pub fn resource_ceiling(tasks: &Vec<Task>) -> ResourceToPriority {
 #[test]
 fn cielings() {
     let task_set = task_set();
-    let rtp = resource_ceiling(&task_set.tasks);
+    let rtp = resource_ceiling(&task_set);
     println!("ceilings {:?}", rtp);
 }

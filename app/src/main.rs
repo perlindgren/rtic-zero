@@ -19,11 +19,12 @@ fn init(cx: init::Context) {
 }
 
 #[no_mangle]
-fn idle(cx: idle::Context) {
-    hprintln!("idle {} {}", cx.local.a, cx.local.b).ok();
+fn idle(cx: idle::Context) -> ! {
+    hprintln!("idle {}", cx.local.a).ok();
     *cx.local.a += 1;
-    *cx.local.b += 1;
-    hprintln!("idle {} {}", cx.local.a, cx.local.b).ok();
+
+    hprintln!("idle {}", cx.local.a).ok();
 
     debug::exit(debug::EXIT_SUCCESS);
+    loop {}
 }
