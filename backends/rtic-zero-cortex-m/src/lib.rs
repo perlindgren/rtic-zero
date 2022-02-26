@@ -1,39 +1,14 @@
-use core::cell::{Cell, UnsafeCell};
-use core::marker::PhantomData;
-use core::marker::Sync;
+#![no_std]
 
-// Newtype over `Cell` that forbids mutation through a shared reference
-pub struct Priority {
-    inner: Cell<u8>,
-}
+use mutex::Mutex as MutexTrait;
+use rtic_zero::priority::Priority;
 
-impl Priority {
-    /// Create a new Priority
-    ///
-    /// # Safety
-    ///
-    /// Will overwrite the current Priority
-    #[inline(always)]
-    pub unsafe fn new(value: u8) -> Self {
-        Priority {
-            inner: Cell::new(value),
-        }
-    }
+use core::{
+    cell::UnsafeCell,
+    marker::{PhantomData, Sync},
+};
 
-    /// Change the current priority to `value`
-    // These two methods are used by `lock` (see below) but can't be used from the RTIC application
-    #[inline(always)]
-    fn set(&self, value: u8) {
-        self.inner.set(value)
-    }
-
-    /// Get the current priority
-    /// should maybe not be public but for testing its ok
-    #[inline(always)]
-    pub fn get(&self) -> u8 {
-        self.inner.get()
-    }
-}
+use cortex_m_semihosting::hprintln;
 
 // Resource
 // Storage in `static` using UnsafeCell
@@ -41,7 +16,7 @@ impl Priority {
 // Safety:
 // pub is ok
 // - inner cell is private
-// - lock is private
+// - lock requires priority (unsafe to construct)
 pub struct Resource<'a, T, const CEIL: u8> {
     cell: UnsafeCell<T>,
     _lifetime: PhantomData<&'a T>,
@@ -53,18 +28,18 @@ unsafe impl<'a, T, const CEIL: u8> Sync for Resource<'a, T, CEIL> {}
 impl<'a, T, const CEIL: u8> Resource<'a, T, CEIL> {
     // internal
     #[inline(always)]
-    fn lock<R>(&self, priority: &'a Priority, f: impl FnOnce(&mut T) -> R) -> R {
-        println!("Resource CEIL = {}", CEIL);
+    pub fn lock<R>(&self, priority: &'a Priority, f: impl FnOnce(&mut T) -> R) -> R {
+        hprintln!("Resource CEIL = {}", CEIL).ok();
         let current = priority.get();
         if CEIL > current {
             priority.set(CEIL);
-            println!("-- raise system ceiling to {}", CEIL);
+            hprintln!("-- raise system ceiling to {}", CEIL).ok();
             let r = f(unsafe { &mut *self.cell.get() });
-            println!("-- lower system ceiling to {}", current);
+            hprintln!("-- lower system ceiling to {}", current).ok();
             priority.set(current);
             r
         } else {
-            println!("-- lock free access to resource");
+            hprintln!("-- lock free access to resource").ok();
             f(unsafe { &mut *self.cell.get() })
         }
     }
@@ -84,20 +59,26 @@ impl<'a, T, const CEIL: u8> Resource<'a, T, CEIL> {
 // Safety
 // - pub fn lock        requires &mut access (preventing re-locking)
 // - pub unsafe fn new  new proxies only by code gen
-pub struct Mutex<'a, T, const CEIL: u8> {
+pub struct MutexProxy<'a, T, const CEIL: u8> {
     priority: &'a Priority,
     resource: &'a Resource<'a, T, CEIL>,
 }
 
-impl<'a, T, const CEIL: u8> Mutex<'a, T, CEIL> {
+impl<'a, T, const CEIL: u8> MutexProxy<'a, T, CEIL> {
     #[inline(always)]
     pub fn lock<R>(&mut self, f: impl FnOnce(&mut T) -> R) -> R {
-        println!("Mutex CEIL = {}", CEIL);
+        hprintln!("Mutex CEIL = {}", CEIL).ok();
         self.resource.lock(self.priority, f)
     }
 
     #[inline(always)]
     pub const unsafe fn new(resource: &'a Resource<'a, T, CEIL>, priority: &'a Priority) -> Self {
         Self { priority, resource }
+    }
+}
+
+impl<'a, T, const CEIL: u8> MutexTrait<T> for MutexProxy<'a, T, CEIL> {
+    fn lock<R>(&mut self, f: impl FnOnce(&mut T) -> R) -> R {
+        self.lock(f)
     }
 }

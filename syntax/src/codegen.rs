@@ -19,49 +19,80 @@ fn shared(resources: &Vec<Resource>) -> Vec<TokenStream> {
         .collect()
 }
 
-fn local(resources: &Vec<ResourceInit>) -> Vec<TokenStream> {
-    resources
+// fn local(resources: &Vec<ResourceInit>) -> Vec<TokenStream> {
+//     resources
+//         .iter()
+//         .map(|ResourceInit { id, ty, .. }| {
+//             let id = ident(id);
+//             let ty = TokenStream::from_str(ty).unwrap();
+//             quote! { #id: &mut #ty }
+//         })
+//         .collect()
+// }
+
+fn local(resources: &Vec<ResourceInit>) -> TokenStream {
+
+    
+    let ty_fields: Vec<_> = resources
         .iter()
         .map(|ResourceInit { id, ty, .. }| {
             let id = ident(id);
             let ty = TokenStream::from_str(ty).unwrap();
             quote! { #id: &mut #ty }
         })
-        .collect()
-}
+        .collect();
 
-fn gen_init(init: &Init) -> TokenStream {
-    let local: Vec<_> = local(&init.local);
+    let imp_fields: Vec<_> = resources
+        .iter()
+        .map(|ResourceInit { id, value, .. }| {
+            let id = ident(id);
+            let value = TokenStream::from_str(value).unwrap();
+            quote! { #id: &mut #value }
+        })
+        .collect();
 
     quote! {
-        mod init {
+        pub struct Local {
+            #(#ty_fields),*
+        }
 
-            pub struct Local {
-                #(#local),*
-            }
-
-            pub struct Context {
-                local: Local,
+        impl Local {
+            fn new() -> Self {
+                Local {
+                    #(#imp_fields),*
+                }
             }
         }
     }
 }
 
-fn gen_task(task: &Task) -> TokenStream {
+fn gen_init(init: &Init, rtp: &ResourceToPriority) -> TokenStream {
+    let local = local(&init.local);
+
+    quote! {
+        mod init {
+           #local
+        }
+    }
+}
+
+fn gen_task(task: &Task, rtp: &ResourceToPriority) -> TokenStream {
     let id = ident(&task.id);
 
     let shared = shared(&task.shared);
 
-    let local: Vec<_> = local(&task.local);
+    let local = local(&task.local);
+
+    // let local_resources = local_resources(&task.local);
 
     quote! {
         mod #id {
             pub struct Shared {
                 #(#shared),*
             }
-            pub struct Local {
-                #(#local),*
-            }
+
+            #local
+
             pub struct Context {
                 shared: Shared,
                 local: Local,
@@ -70,25 +101,32 @@ fn gen_task(task: &Task) -> TokenStream {
     }
 }
 
-fn gen_task_set(task_set: &TaskSet) -> TokenStream {
+use crate::analysis::ResourceToPriority;
+
+fn gen_task_set(task_set: &TaskSet, rtp: &ResourceToPriority) -> TokenStream {
     let mut tasks = vec![];
+    let init = gen_init(&task_set.init, rtp);
 
     // gen.push(gen_init(&task_set.init));
     // gen_idle(&task_set.idle);
 
     for task in &task_set.tasks {
-        tasks.push(gen_task(task));
+        tasks.push(gen_task(task, rtp));
     }
 
     quote! {
-        use 
         mod app {
+            use rtic::export::*;
 
-            #(#tasks)*
+            //#(#tasks)*
+
+            #init
 
         }
     }
 }
+
+fn gen_shared() {}
 
 #[cfg(test)]
 mod test {
@@ -100,7 +138,8 @@ mod test {
     #[test]
     fn test_gen_task() {
         let task_set = task_set();
-        let s = gen_task_set(&task_set);
+        let rtp = crate::analysis::resource_ceiling(&task_set.tasks);
+        let s = gen_task_set(&task_set, &rtp);
 
         let path = Path::new("out.rs");
         let display = path.display();

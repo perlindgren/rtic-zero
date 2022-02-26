@@ -1,8 +1,9 @@
 // syntax
 
-use proc_macro2::TokenStream;
+// use proc_macro2::TokenStream;
 use serde::{Deserialize, Serialize};
-use std::str::FromStr;
+// use std::str::FromStr;
+
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone, Hash)]
 pub struct Task {
     pub id: String,
@@ -72,7 +73,7 @@ pub fn task_set() -> TaskSet {
         shared: vec![],
         local: vec![],
         init: Init {
-            local: vec![],
+            local: vec![ri2.clone()],
             late: (),
         },
         tasks: vec![

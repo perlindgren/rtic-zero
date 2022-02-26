@@ -5,8 +5,22 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+# [lib]
+# name = "rtic_zero"
+
 [dependencies]
 
 [workspace]
 
-members = ["syntax", "app"]
+members = [
+    # Syntax analysis and codegen
+    "syntax",
+    # An example app
+    "app",
+    # mutex
+    "mutex",
+    # backends
+    "backends/rtic-zero-cortex-m",
+    # "rtic-zero-linux",
+    # "rtic-zero-risc-v",
+]
