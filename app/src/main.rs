@@ -19,11 +19,13 @@ fn init(cx: init::Context) {
 }
 
 #[no_mangle]
-fn idle(cx: idle::Context) -> ! {
-    hprintln!("idle {}", cx.local.a).ok();
+fn idle(mut cx: idle::Context) -> ! {
+    hprintln!("idle local a {}", cx.local.a).ok();
     *cx.local.a += 1;
 
-    hprintln!("idle {}", cx.local.a).ok();
+    hprintln!("idle local a {}", cx.local.a).ok();
+
+    hprintln!("idle shared c {}", cx.shared.c.lock(|c| *c)).ok();
 
     debug::exit(debug::EXIT_SUCCESS);
     loop {}

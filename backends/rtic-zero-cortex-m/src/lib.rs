@@ -59,12 +59,12 @@ impl<'a, T, const CEIL: u8> Resource<'a, T, CEIL> {
 // Safety
 // - pub fn lock        requires &mut access (preventing re-locking)
 // - pub unsafe fn new  new proxies only by code gen
-pub struct MutexProxy<'a, T, const CEIL: u8> {
+pub struct ResourceProxy<'a, T, const CEIL: u8> {
     priority: &'a Priority,
     resource: &'a Resource<'a, T, CEIL>,
 }
 
-impl<'a, T, const CEIL: u8> MutexProxy<'a, T, CEIL> {
+impl<'a, T, const CEIL: u8> ResourceProxy<'a, T, CEIL> {
     #[inline(always)]
     pub fn lock<R>(&mut self, f: impl FnOnce(&mut T) -> R) -> R {
         hprintln!("Mutex CEIL = {}", CEIL).ok();
@@ -77,7 +77,7 @@ impl<'a, T, const CEIL: u8> MutexProxy<'a, T, CEIL> {
     }
 }
 
-impl<'a, T, const CEIL: u8> MutexTrait<T> for MutexProxy<'a, T, CEIL> {
+impl<'a, T, const CEIL: u8> MutexTrait<T> for ResourceProxy<'a, T, CEIL> {
     fn lock<R>(&mut self, f: impl FnOnce(&mut T) -> R) -> R {
         self.lock(f)
     }

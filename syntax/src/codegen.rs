@@ -8,15 +8,56 @@ fn ident(i: &str) -> Ident {
     Ident::new(i, Span::call_site())
 }
 
-fn shared(resources: &Vec<Resource>) -> Vec<TokenStream> {
-    resources
+fn shared(resources: &Vec<Resource>) -> TokenStream {
+    // resources
+    //     .iter()
+    //     .map(|Resource { id, ty }| {
+    //         let id = ident(id);
+    //         let ty = TokenStream::from_str(ty).unwrap();
+    //         quote! {#id: #ty}
+    //     })
+    //     .collect()
+
+    let (field_ty, (field_cell, field_new)): (Vec<_>, (Vec<_>, Vec<_>)) = resources
         .iter()
         .map(|Resource { id, ty }| {
             let id = ident(id);
+            let id_internal = ident(&format!("__rtic_internal_{}", id));
             let ty = TokenStream::from_str(ty).unwrap();
-            quote! {#id: #ty}
+
+            (
+                quote! { pub #id: &'a mut #ty },
+                (
+                    quote! {
+                        #[allow(non_upper_case_globals)]
+                        // static #id_internal: RacyCell<#ty> = RacyCell::new(#value)
+                    },
+                    quote! {
+
+                        #id: &mut *#id_internal.get_mut()
+                    },
+                ),
+            )
         })
-        .collect()
+        .unzip();
+
+    quote! {
+
+        // #(#field_cell);*;
+
+        // pub struct Local<'a> {
+        //     #(#field_ty),*
+        // }
+
+        // impl<'a> Local<'a> {
+        //      pub unsafe fn new() -> Self {
+        //         Self {
+        //             #(#field_new),*
+        //         }
+        //     }
+        // }
+
+    }
 }
 
 fn local(resources: &Vec<ResourceInit>) -> TokenStream {
@@ -127,9 +168,7 @@ fn gen_task(task: &Task, rtp: &ResourceToPriority) -> TokenStream {
         mod #id {
             use super::*;
 
-            pub struct Shared {
-                #(#shared),*
-            }
+            #shared
 
             #local
 
