@@ -69,7 +69,7 @@ fn local(resources: &Vec<ResourceInit>) -> TokenStream {
         .iter()
         .map(|ResourceInit { id, ty, value }| {
             let id = ident(id);
-            let id_internal = ident(&format!("__rtic_internal_{}", id));
+            let id_internal = mangled_ident(&id);
             let ty = TokenStream::from_str(ty).unwrap();
             let value = TokenStream::from_str(value).unwrap();
             (
@@ -201,7 +201,6 @@ fn gen_task(task: &Task, rtp: &ResourceToPriority) -> TokenStream {
 }
 
 fn gen_shared(shared: &Vec<Resource>, rtp: &ResourceToPriority) -> TokenStream {
-    println!("------------ {:?}", shared);
     let field_res: Vec<_> = shared
         .iter()
         .map(|r| {
@@ -222,7 +221,6 @@ fn gen_shared(shared: &Vec<Resource>, rtp: &ResourceToPriority) -> TokenStream {
     quote! {
         mod resources {
             use super::*;
-            use core::mem::MaybeUninit;
 
             #(#field_res),*
 
@@ -249,6 +247,9 @@ fn gen_task_set(task_set: &TaskSet, rtp: &ResourceToPriority) -> TokenStream {
         use mutex::Mutex;
         #[allow(unused_imports)]
         use rtic_zero::{racy_cell::RacyCell, priority::Priority};
+        #[allow(unused_imports)]
+        use core::mem::MaybeUninit;
+
         use cortex_m_semihosting::debug;
 
         #[no_mangle]

@@ -3,11 +3,8 @@
 use mutex::Mutex as MutexTrait;
 use rtic_zero::priority::Priority;
 
-use core::{
-    cell::UnsafeCell,
-    marker::{PhantomData, Sync},
-};
-
+use core::mem::MaybeUninit;
+use core::{cell::UnsafeCell, marker::Sync};
 use cortex_m_semihosting::hprintln;
 
 // Resource
@@ -17,39 +14,48 @@ use cortex_m_semihosting::hprintln;
 // pub is ok
 // - inner cell is private
 // - lock requires priority (unsafe to construct)
-pub struct Resource<'a, T, const CEIL: u8> {
-    cell: UnsafeCell<T>,
-    _lifetime: PhantomData<&'a T>,
+//
+// WHAT ABOUT DROP SEMANTICS????
+pub struct Resource<T, const CEIL: u8> {
+    cell: UnsafeCell<MaybeUninit<T>>,
 }
 
-unsafe impl<'a, T, const CEIL: u8> Sync for Resource<'a, T, CEIL> {}
+unsafe impl<T, const CEIL: u8> Sync for Resource<T, CEIL> {}
 
 // architecture specific lock implementation
-impl<'a, T, const CEIL: u8> Resource<'a, T, CEIL> {
+impl<T, const CEIL: u8> Resource<T, CEIL> {
     // internal
     #[inline(always)]
-    pub fn lock<R>(&self, priority: &'a Priority, f: impl FnOnce(&mut T) -> R) -> R {
+    fn lock<'a, R>(&self, priority: &'a Priority, f: impl FnOnce(&mut T) -> R) -> R {
         hprintln!("Resource CEIL = {}", CEIL).ok();
         let current = priority.get();
         if CEIL > current {
             priority.set(CEIL);
             hprintln!("-- raise system ceiling to {}", CEIL).ok();
-            let r = f(unsafe { &mut *self.cell.get() });
+
+            let r = f(unsafe { &mut *(*self.cell.get()).as_mut_ptr() });
+
             hprintln!("-- lower system ceiling to {}", current).ok();
             priority.set(current);
+
             r
         } else {
             hprintln!("-- lock free access to resource").ok();
-            f(unsafe { &mut *self.cell.get() })
+
+            f(unsafe { &mut *(*self.cell.get()).as_mut_ptr() })
         }
     }
 
     #[inline(always)]
-    pub const fn new(v: T) -> Self {
+    pub const fn new() -> Self {
         Self {
-            cell: UnsafeCell::new(v),
-            _lifetime: PhantomData,
+            cell: UnsafeCell::new(MaybeUninit::uninit()),
         }
+    }
+
+    #[inline(always)]
+    pub unsafe fn write_maybe_uninit(&self, v: T) {
+        (*self.cell.get()).write(v);
     }
 }
 
@@ -61,7 +67,7 @@ impl<'a, T, const CEIL: u8> Resource<'a, T, CEIL> {
 // - pub unsafe fn new  new proxies only by code gen
 pub struct ResourceProxy<'a, T, const CEIL: u8> {
     priority: &'a Priority,
-    resource: &'a Resource<'a, T, CEIL>,
+    resource: &'a Resource<T, CEIL>,
 }
 
 impl<'a, T, const CEIL: u8> ResourceProxy<'a, T, CEIL> {
@@ -72,7 +78,7 @@ impl<'a, T, const CEIL: u8> ResourceProxy<'a, T, CEIL> {
     }
 
     #[inline(always)]
-    pub const unsafe fn new(resource: &'a Resource<'a, T, CEIL>, priority: &'a Priority) -> Self {
+    pub const unsafe fn new(resource: &'a Resource<T, CEIL>, priority: &'a Priority) -> Self {
         Self { priority, resource }
     }
 }

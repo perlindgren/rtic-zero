@@ -1,5 +1,8 @@
 #[allow(unused_imports)]
 use crate::rtic_arch::{Resource, ResourceProxy};
+use core::cell::UnsafeCell;
+#[allow(unused_imports)]
+use core::mem::MaybeUninit;
 use cortex_m_semihosting::debug;
 #[allow(unused_imports)]
 use mutex::Mutex;
@@ -7,7 +10,10 @@ use mutex::Mutex;
 use rtic_zero::{priority::Priority, racy_cell::RacyCell};
 #[no_mangle]
 unsafe extern "C" fn main() -> ! {
-    init::run();
+    let shared = init::run();
+
+    resources::c.write_maybe_uninit(123);
+
     let priority = Priority::new(0);
     idle::run(&priority);
     debug::exit(debug::EXIT_SUCCESS);
@@ -15,10 +21,13 @@ unsafe extern "C" fn main() -> ! {
 }
 mod resources {
     use super::*;
-    use core::mem::MaybeUninit;
     #[allow(non_upper_case_globals)]
-    pub static c: Resource<u64, 0> = Resource::new(0);
+    pub static c: Resource<u64, 0> = Resource::new();
 }
+pub struct Shared {
+    pub c: u64,
+}
+
 pub mod init {
     use super::*;
     #[allow(non_upper_case_globals)]
@@ -40,13 +49,13 @@ pub mod init {
     pub struct Context<'a> {
         pub local: Local<'a>,
     }
-    pub unsafe fn run() {
+    pub unsafe fn run() -> Shared {
         init(Context {
             local: Local::new(),
-        });
+        })
     }
     extern "Rust" {
-        fn init(cx: Context);
+        fn init(cx: Context) -> Shared;
     }
 }
 pub mod idle {

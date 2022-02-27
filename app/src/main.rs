@@ -12,10 +12,12 @@ pub use rtic_zero_cortex_m as rtic_arch;
 use cortex_m_semihosting::{debug, hprintln};
 
 #[no_mangle]
-fn init(cx: init::Context) {
+fn init(cx: init::Context) -> Shared {
     hprintln!("init {} {}", cx.local.a, cx.local.b).ok();
     *cx.local.a += 1;
     *cx.local.b += 1;
+
+    Shared { c: 123 }
 }
 
 #[no_mangle]
