@@ -4,58 +4,58 @@ use std::str::FromStr;
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::quote;
 
-fn ident(i: &str) -> Ident {
-    Ident::new(i, Span::call_site())
+fn ident(s: &str) -> Ident {
+    Ident::new(s, Span::call_site())
 }
 
-fn shared(resources: &Vec<Resource>) -> TokenStream {
-    // resources
-    //     .iter()
-    //     .map(|Resource { id, ty }| {
-    //         let id = ident(id);
-    //         let ty = TokenStream::from_str(ty).unwrap();
-    //         quote! {#id: #ty}
-    //     })
-    //     .collect()
+// TODO: Do we really need/want to mangle internal names
+// They occur only in generated modules, so name clashes should not be a problem
 
-    let (field_ty, (field_cell, field_new)): (Vec<_>, (Vec<_>, Vec<_>)) = resources
+fn mangled_ident(s: &str) -> Ident {
+    Ident::new(s, Span::call_site())
+    // Ident::new(&format!("__rtic_internal_{}", s), Span::call_site())
+}
+
+fn ts(s: &str) -> TokenStream {
+    TokenStream::from_str(s).unwrap()
+}
+
+fn shared(resources: &Vec<Resource>, rtp: &ResourceToPriority) -> TokenStream {
+    let (field_ty, field_new): (Vec<_>, Vec<_>) = resources
         .iter()
-        .map(|Resource { id, ty }| {
+        .map(|r| {
+            let ceil = rtp.get(r).unwrap();
+            let ceil = ts(&format!("{}", ceil));
+
+            let Resource { id, ty } = r;
+            let id_internal = mangled_ident(id);
             let id = ident(id);
-            let id_internal = ident(&format!("__rtic_internal_{}", id));
-            let ty = TokenStream::from_str(ty).unwrap();
+            let ty = ts(ty);
 
             (
-                quote! { pub #id: &'a mut #ty },
-                (
-                    quote! {
-                        #[allow(non_upper_case_globals)]
-                        // static #id_internal: RacyCell<#ty> = RacyCell::new(#value)
-                    },
-                    quote! {
-
-                        #id: &mut *#id_internal.get_mut()
-                    },
-                ),
+                quote! {
+                    pub #id: ResourceProxy<'a, #ty, #ceil>
+                },
+                quote! {
+                    #id: ResourceProxy::new(&resources::#id_internal, priority)
+                },
             )
         })
         .unzip();
 
     quote! {
 
-        // #(#field_cell);*;
+        pub struct Shared<'a> {
+            #(#field_ty),*
+        }
 
-        // pub struct Local<'a> {
-        //     #(#field_ty),*
-        // }
-
-        // impl<'a> Local<'a> {
-        //      pub unsafe fn new() -> Self {
-        //         Self {
-        //             #(#field_new),*
-        //         }
-        //     }
-        // }
+        impl<'a> Shared<'a> {
+            pub unsafe fn new(priority: &'a Priority) -> Self {
+                Self {
+                    #(#field_new),*
+                }
+            }
+        }
 
     }
 }
@@ -133,6 +133,7 @@ fn gen_init(init: &Init) -> TokenStream {
 
 fn gen_idle(idle: &Idle, rtp: &ResourceToPriority) -> TokenStream {
     let local = local(&idle.local);
+    let shared = shared(&idle.shared, rtp);
 
     quote! {
 
@@ -142,13 +143,17 @@ fn gen_idle(idle: &Idle, rtp: &ResourceToPriority) -> TokenStream {
 
             #local
 
+            #shared
+
             pub struct Context<'a> {
                 pub local: Local<'a>,
+                pub shared: Shared<'a>,
             }
 
-            pub unsafe fn run() {
+            pub unsafe fn run<'a>(priority: &'a Priority) {
                 idle(Context {
                     local: Local::new(),
+                    shared: Shared::new(priority),
                 });
             }
 
@@ -161,16 +166,16 @@ fn gen_idle(idle: &Idle, rtp: &ResourceToPriority) -> TokenStream {
 
 fn gen_task(task: &Task, rtp: &ResourceToPriority) -> TokenStream {
     let id = ident(&task.id);
-    let shared = shared(&task.shared);
+    let shared = shared(&task.shared, rtp);
     let local = local(&task.local);
 
     quote! {
         mod #id {
             use super::*;
 
-            #shared
-
             #local
+
+            #shared
 
             pub struct Context {
                 shared: Shared,
@@ -200,7 +205,7 @@ fn gen_task_set(task_set: &TaskSet, rtp: &ResourceToPriority) -> TokenStream {
 
     quote! {
         #[allow(unused_imports)]
-        use crate::rtic_arch::{MutexProxy, Resource};
+        use crate::rtic_arch::{ResourceProxy, Resource};
         #[allow(unused_imports)]
         use mutex::Mutex;
         #[allow(unused_imports)]
