@@ -12,7 +12,7 @@ use rtic_zero::{priority::Priority, racy_cell::RacyCell};
 unsafe extern "C" fn main() -> ! {
     let shared = init::run();
 
-    resources::c.write_maybe_uninit(123);
+    resources::c.write_maybe_uninit(shared.c);
 
     let priority = Priority::new(0);
     idle::run(&priority);
