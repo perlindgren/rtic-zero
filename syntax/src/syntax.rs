@@ -69,7 +69,7 @@ pub fn task_set() -> TaskSet {
 
     TaskSet {
         device: "some_dev".into(),
-        shared: vec![],
+        shared: vec![rs1.clone()],
         local: vec![],
         init: Init {
             local: vec![rl1.clone(), rl2.clone()],

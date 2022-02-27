@@ -1,27 +1,24 @@
 #[allow(unused_imports)]
 use crate::rtic_arch::{Resource, ResourceProxy};
-use cortex_m::register::primask::Primask;
 use cortex_m_semihosting::debug;
 #[allow(unused_imports)]
 use mutex::Mutex;
 #[allow(unused_imports)]
 use rtic_zero::{priority::Priority, racy_cell::RacyCell};
-
 #[no_mangle]
 unsafe extern "C" fn main() -> ! {
     init::run();
-    let p = Priority::new(0);
-    idle::run(&p);
+    let priority = Priority::new(0);
+    idle::run(&priority);
     debug::exit(debug::EXIT_SUCCESS);
     loop {}
 }
-
-pub mod resources {
+mod resources {
     use super::*;
+    use core::mem::MaybeUninit;
     #[allow(non_upper_case_globals)]
     pub static c: Resource<u64, 0> = Resource::new(0);
 }
-
 pub mod init {
     use super::*;
     #[allow(non_upper_case_globals)]
@@ -66,30 +63,27 @@ pub mod idle {
             }
         }
     }
-
     pub struct Shared<'a> {
         pub c: ResourceProxy<'a, u64, 0>,
     }
-
     impl<'a> Shared<'a> {
-        pub unsafe fn new(p: &'a Priority) -> Self {
+        pub unsafe fn new(priority: &'a Priority) -> Self {
             Self {
-                c: ResourceProxy::new(&resources::c, p),
+                c: ResourceProxy::new(&resources::c, priority),
             }
         }
     }
-
     pub struct Context<'a> {
         pub local: Local<'a>,
         pub shared: Shared<'a>,
     }
-    pub unsafe fn run<'a>(p: &'a Priority) {
+    pub unsafe fn run<'a>(priority: &'a Priority) {
         idle(Context {
             local: Local::new(),
-            shared: Shared::new(p),
+            shared: Shared::new(priority),
         });
     }
     extern "Rust" {
-        fn idle(cx: Context) -> !;
+        fn idle(cx: Context);
     }
 }

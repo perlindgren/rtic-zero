@@ -4,6 +4,10 @@ use std::str::FromStr;
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::quote;
 
+use crate::analysis::ResourceToPriority;
+
+// some helpers
+
 fn ident(s: &str) -> Ident {
     Ident::new(s, Span::call_site())
 }
@@ -131,36 +135,47 @@ fn gen_init(init: &Init) -> TokenStream {
     }
 }
 
-fn gen_idle(idle: &Idle, rtp: &ResourceToPriority) -> TokenStream {
-    let local = local(&idle.local);
-    let shared = shared(&idle.shared, rtp);
+fn gen_idle(idle: &Option<Idle>, rtp: &ResourceToPriority) -> (TokenStream, TokenStream) {
+    if let Some(idle) = idle {
+        let local = local(&idle.local);
+        let shared = shared(&idle.shared, rtp);
 
-    quote! {
+        (
+            quote! {
 
-        pub mod idle {
+                pub mod idle {
 
-            use super::*;
+                    use super::*;
 
-            #local
+                    #local
 
-            #shared
+                    #shared
 
-            pub struct Context<'a> {
-                pub local: Local<'a>,
-                pub shared: Shared<'a>,
-            }
+                    pub struct Context<'a> {
+                        pub local: Local<'a>,
+                        pub shared: Shared<'a>,
+                    }
 
-            pub unsafe fn run<'a>(priority: &'a Priority) {
-                idle(Context {
-                    local: Local::new(),
-                    shared: Shared::new(priority),
-                });
-            }
+                    pub unsafe fn run<'a>(priority: &'a Priority) {
+                        idle(Context {
+                            local: Local::new(),
+                            shared: Shared::new(priority),
+                        });
+                    }
 
-            extern "Rust" {
-                fn idle(cx: Context) -> !;
-            }
-        }
+                    extern "Rust" {
+                        fn idle(cx: Context);
+                    }
+                }
+            },
+            quote! {
+                // idle runs at priority 0
+                let priority = Priority::new(0);
+                idle::run(&priority);
+            },
+        )
+    } else {
+        (quote! {}, quote! {})
     }
 }
 
@@ -185,19 +200,43 @@ fn gen_task(task: &Task, rtp: &ResourceToPriority) -> TokenStream {
     }
 }
 
-use crate::analysis::ResourceToPriority;
+fn gen_shared(shared: &Vec<Resource>, rtp: &ResourceToPriority) -> TokenStream {
+    println!("------------ {:?}", shared);
+    let field_res: Vec<_> = shared
+        .iter()
+        .map(|r| {
+            let ceil = rtp.get(r).unwrap();
+            let ceil = ts(&format!("{}", ceil));
+
+            let Resource { id, ty } = r;
+            let id_internal = mangled_ident(id);
+            // let id = ident(id);
+            let ty = ts(ty);
+            quote! {
+                #[allow(non_upper_case_globals)]
+                pub static #id_internal: Resource<#ty, #ceil> = Resource::new(0);
+            }
+        })
+        .collect();
+
+    quote! {
+        mod resources {
+            use super::*;
+            use core::mem::MaybeUninit;
+
+            #(#field_res),*
+
+        }
+    }
+}
 
 fn gen_task_set(task_set: &TaskSet, rtp: &ResourceToPriority) -> TokenStream {
     let mut tasks = vec![];
     let init = gen_init(&task_set.init);
 
-    let (idle, idle_call) = match &task_set.idle {
-        Some(idle) => (gen_idle(idle, rtp), quote! {idle::run();}),
-        None => (quote! {}, quote! {}),
-    };
+    let resources = gen_shared(&task_set.shared, rtp);
 
-    // gen.push(gen_init(&task_set.init));
-    // gen_idle(&task_set.idle);
+    let (idle, idle_call) = gen_idle(&task_set.idle, rtp);
 
     for task in &task_set.tasks {
         tasks.push(gen_task(task, rtp));
@@ -209,7 +248,7 @@ fn gen_task_set(task_set: &TaskSet, rtp: &ResourceToPriority) -> TokenStream {
         #[allow(unused_imports)]
         use mutex::Mutex;
         #[allow(unused_imports)]
-        use rtic_zero::racy_cell::RacyCell;
+        use rtic_zero::{racy_cell::RacyCell, priority::Priority};
         use cortex_m_semihosting::debug;
 
         #[no_mangle]
@@ -224,7 +263,7 @@ fn gen_task_set(task_set: &TaskSet, rtp: &ResourceToPriority) -> TokenStream {
             loop {}
         }
 
-         //#(#tasks)*
+        #resources
 
         #init
 
