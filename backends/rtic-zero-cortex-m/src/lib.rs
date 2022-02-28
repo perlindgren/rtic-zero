@@ -5,7 +5,23 @@ use rtic_zero::priority::Priority;
 
 use core::mem::MaybeUninit;
 use core::{cell::UnsafeCell, marker::Sync};
+use cortex_m::{interrupt::InterruptNumber, peripheral::NVIC};
 use cortex_m_semihosting::hprintln;
+
+extern "Rust" {
+    fn nvic_prio_bits() -> u8;
+}
+
+/// Sets the given `interrupt` as pending
+///
+/// This is a convenience function around
+/// [`NVIC::pend`](../cortex_m/peripheral/struct.NVIC.html#method.pend)
+pub fn pend<I>(interrupt: I)
+where
+    I: InterruptNumber,
+{
+    NVIC::pend(interrupt)
+}
 
 // Resource
 // Storage in `static` using UnsafeCell

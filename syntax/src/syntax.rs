@@ -73,7 +73,7 @@ pub fn task_set() -> TaskSet {
     };
 
     TaskSet {
-        device: "some_dev".into(),
+        device: "lm3s6965".into(),
         shared: vec![rs1.clone(), rs2.clone()],
         local: vec![],
         init: Init {
@@ -84,7 +84,13 @@ pub fn task_set() -> TaskSet {
             local: vec![rl1.clone()],
             shared: vec![rs1.clone(), rs2.clone()],
         }),
-        tasks: vec![],
+        tasks: vec![Task {
+            id: "t1".into(),
+            priority: 1,
+            binds: Some("GPIOA".into()),
+            shared: vec![rs1.clone()],
+            local: vec![rl2.clone()],
+        }],
     }
 }
 

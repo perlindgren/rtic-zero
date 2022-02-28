@@ -9,7 +9,8 @@ use mutex::Mutex;
 use rtic_zero::{priority::Priority, racy_cell::RacyCell};
 #[no_mangle]
 unsafe extern "C" fn main() -> ! {
-    init::run();
+    let shared = init::run();
+    resources::move_shared(shared);
     let priority = Priority::new(0);
     idle::run(&priority);
     debug::exit(debug::EXIT_SUCCESS);
@@ -17,11 +18,18 @@ unsafe extern "C" fn main() -> ! {
 }
 pub struct Shared {
     pub c: u64,
+    pub d: u8,
 }
 mod resources {
     use super::*;
     #[allow(non_upper_case_globals)]
-    pub static c: Resource<u64, 0> = Resource::new();
+    pub static c: Resource<u64, 1> = Resource::new();
+    #[allow(non_upper_case_globals)]
+    pub static d: Resource<u8, 0> = Resource::new();
+    pub unsafe fn move_shared(shared: Shared) {
+        c.write_maybe_uninit(shared.c);
+        d.write_maybe_uninit(shared.d);
+    }
 }
 pub mod init {
     use super::*;
@@ -68,12 +76,14 @@ pub mod idle {
         }
     }
     pub struct Shared<'a> {
-        pub c: ResourceProxy<'a, u64, 0>,
+        pub c: ResourceProxy<'a, u64, 1>,
+        pub d: ResourceProxy<'a, u8, 0>,
     }
     impl<'a> Shared<'a> {
         pub unsafe fn new(priority: &'a Priority) -> Self {
             Self {
                 c: ResourceProxy::new(&resources::c, priority),
+                d: ResourceProxy::new(&resources::d, priority),
             }
         }
     }
@@ -90,4 +100,34 @@ pub mod idle {
     extern "Rust" {
         fn idle(cx: Context);
     }
+}
+pub mod t1 {
+    use super::*;
+    #[allow(non_upper_case_globals)]
+    static b: RacyCell<u64> = RacyCell::new(64);
+    pub struct Local<'a> {
+        pub b: &'a mut u64,
+    }
+    impl<'a> Local<'a> {
+        pub unsafe fn new() -> Self {
+            Self {
+                b: &mut *b.get_mut(),
+            }
+        }
+    }
+    pub struct Shared<'a> {
+        pub c: ResourceProxy<'a, u64, 1>,
+    }
+    impl<'a> Shared<'a> {
+        pub unsafe fn new(priority: &'a Priority) -> Self {
+            Self {
+                c: ResourceProxy::new(&resources::c, priority),
+            }
+        }
+    }
+    pub struct Context<'a> {
+        pub shared: Shared<'a>,
+        pub local: Local<'a>,
+    }
+    pub fn pend() {}
 }

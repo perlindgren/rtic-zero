@@ -3,13 +3,13 @@
 #![no_main]
 
 use app::*;
-use lm3s6965 as _;
+use lm3s6965;
 use panic_halt as _;
 
 // Backend
-pub use rtic_zero_cortex_m as rtic_arch;
-
 use cortex_m_semihosting::{debug, hprintln};
+use rtic_arch::pend;
+pub use rtic_zero_cortex_m as rtic_arch;
 
 #[no_mangle]
 fn init(cx: init::Context) -> Shared {
@@ -43,6 +43,29 @@ fn idle(mut cx: idle::Context) -> ! {
     )
     .ok();
 
+    // unsafe {
+    //     cortex_m::interrupt::enable();
+    // }
+
+    // pend(lm3s6965::Interrupt::GPIOA);
+    cortex_m::peripheral::NVIC::pend(lm3s6965::Interrupt::GPIOA);
+    unsafe {
+        cortex_m::peripheral::NVIC::unmask(lm3s6965::Interrupt::GPIOA);
+    };
     debug::exit(debug::EXIT_SUCCESS);
     loop {}
+}
+
+#[no_mangle]
+fn t1(mut cx: t1::Context) {
+    hprintln!("t1 local b {}", cx.local.b).ok();
+    *cx.local.b += 1;
+
+    hprintln!("t1 local b {}", cx.local.b).ok();
+}
+
+#[allow(non_snake_case)]
+#[no_mangle]
+unsafe fn GPIOA() {
+    hprintln!("GPIOA").ok();
 }

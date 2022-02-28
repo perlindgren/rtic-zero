@@ -179,27 +179,6 @@ fn gen_idle(idle: &Option<Idle>, rtp: &ResourceToPriority) -> (TokenStream, Toke
     }
 }
 
-fn gen_task(task: &Task, rtp: &ResourceToPriority) -> TokenStream {
-    let id = ident(&task.id);
-    let shared = shared(&task.shared, rtp);
-    let local = local(&task.local);
-
-    quote! {
-        mod #id {
-            use super::*;
-
-            #local
-
-            #shared
-
-            pub struct Context {
-                shared: Shared,
-                local: Local,
-            }
-        }
-    }
-}
-
 fn gen_shared(shared: &Vec<Resource>, rtp: &ResourceToPriority) -> TokenStream {
     let (field_res, (field_struct, field_move)): (Vec<_>, (Vec<_>, Vec<_>)) = shared
         .iter()
@@ -248,17 +227,51 @@ fn gen_shared(shared: &Vec<Resource>, rtp: &ResourceToPriority) -> TokenStream {
     }
 }
 
+fn gen_task(task: &Task, rtp: &ResourceToPriority) -> TokenStream {
+    let id = ident(&task.id);
+    let shared = shared(&task.shared, rtp);
+    let local = local(&task.local);
+
+    quote! {
+        pub mod #id {
+            use super::*;
+
+            #local
+
+            #shared
+
+            pub struct Context<'a> {
+                pub shared: Shared<'a>,
+                pub local: Local<'a>,
+            }
+
+            pub fn pend() {
+                
+            }
+        }
+    }
+}
+
+fn gen_tasks(tasks: &Vec<Task>, rtp: &ResourceToPriority) -> TokenStream {
+    let mut t: Vec<TokenStream> = vec![];
+
+    for task in tasks {
+        t.push(gen_task(task, rtp));
+    }
+
+    quote! {
+        #(#t)*
+    }
+}
+
 fn gen_task_set(task_set: &TaskSet, rtp: &ResourceToPriority) -> TokenStream {
-    let mut tasks = vec![];
     let init = gen_init(&task_set.init);
 
     let resources = gen_shared(&task_set.shared, rtp);
 
     let (idle, idle_call) = gen_idle(&task_set.idle, rtp);
 
-    for task in &task_set.tasks {
-        tasks.push(gen_task(task, rtp));
-    }
+    let tasks = gen_tasks(&task_set.tasks, rtp);
 
     quote! {
         #[allow(unused_imports)]
@@ -291,6 +304,8 @@ fn gen_task_set(task_set: &TaskSet, rtp: &ResourceToPriority) -> TokenStream {
         #init
 
         #idle
+
+        #tasks
     }
 }
 
