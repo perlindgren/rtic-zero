@@ -201,7 +201,7 @@ fn gen_task(task: &Task, rtp: &ResourceToPriority) -> TokenStream {
 }
 
 fn gen_shared(shared: &Vec<Resource>, rtp: &ResourceToPriority) -> TokenStream {
-    let (field_res, field_struct): (Vec<_>, Vec<_>) = shared
+    let (field_res, (field_struct, field_move)): (Vec<_>, (Vec<_>, Vec<_>)) = shared
         .iter()
         .map(|r| {
             let ceil = rtp.get(r).unwrap();
@@ -210,16 +210,21 @@ fn gen_shared(shared: &Vec<Resource>, rtp: &ResourceToPriority) -> TokenStream {
             let Resource { id, ty } = r;
             let id_internal = mangled_ident(&id);
             let id = ident(&id);
-            // let id = ident(id);
+
             let ty = ts(ty);
             (
                 quote! {
                     #[allow(non_upper_case_globals)]
                     pub static #id_internal: Resource<#ty, #ceil> = Resource::new();
                 },
-                quote! {
-                    pub #id: #ty
-                },
+                (
+                    quote! {
+                        pub #id: #ty
+                    },
+                    quote! {
+                        #id_internal.write_maybe_uninit(shared.#id);
+                    },
+                ),
             )
         })
         .unzip();
@@ -233,7 +238,11 @@ fn gen_shared(shared: &Vec<Resource>, rtp: &ResourceToPriority) -> TokenStream {
         mod resources {
             use super::*;
 
-            #(#field_res),*
+            #(#field_res)*
+
+            pub unsafe fn move_shared(shared: Shared) {
+                #(#field_move)*
+            }
 
         }
     }
@@ -266,7 +275,9 @@ fn gen_task_set(task_set: &TaskSet, rtp: &ResourceToPriority) -> TokenStream {
         #[no_mangle]
         unsafe extern "C" fn main() -> ! {
 
-            init::run();
+            let shared = init::run();
+
+            resources::move_shared(shared);
 
             #idle_call
 

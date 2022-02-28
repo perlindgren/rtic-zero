@@ -17,7 +17,7 @@ fn init(cx: init::Context) -> Shared {
     *cx.local.a += 1;
     *cx.local.b += 1;
 
-    Shared { c: 124 }
+    Shared { c: 1, d: 2 }
 }
 
 #[no_mangle]
@@ -27,7 +27,21 @@ fn idle(mut cx: idle::Context) -> ! {
 
     hprintln!("idle local a {}", cx.local.a).ok();
 
-    hprintln!("idle shared c {}", cx.shared.c.lock(|c| *c)).ok();
+    hprintln!(
+        "idle shared c {}",
+        cx.shared.c.lock(|c| {
+            hprintln!("c {}", *c).ok();
+            *c += cx.shared.d.lock(|d| {
+                hprintln!("d {}", d).ok();
+                *d += *c as u8;
+                hprintln!("d new {}", d).ok();
+                *d
+            }) as u64;
+
+            *c
+        })
+    )
+    .ok();
 
     debug::exit(debug::EXIT_SUCCESS);
     loop {}

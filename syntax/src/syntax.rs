@@ -67,9 +67,14 @@ pub fn task_set() -> TaskSet {
         ty: "u64".into(),
     };
 
+    let rs2 = Resource {
+        id: "d".into(),
+        ty: "u8".into(),
+    };
+
     TaskSet {
         device: "some_dev".into(),
-        shared: vec![rs1.clone()],
+        shared: vec![rs1.clone(), rs2.clone()],
         local: vec![],
         init: Init {
             local: vec![rl1.clone(), rl2.clone()],
@@ -77,7 +82,7 @@ pub fn task_set() -> TaskSet {
         },
         idle: Some(Idle {
             local: vec![rl1.clone()],
-            shared: vec![rs1.clone()],
+            shared: vec![rs1.clone(), rs2.clone()],
         }),
         tasks: vec![],
     }

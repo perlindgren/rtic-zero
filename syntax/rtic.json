@@ -1,1 +1,1 @@
-{"device":"some_dev","shared":[],"local":[],"init":{"local":[{"id":"a","ty":"u32","value":"32"},{"id":"b","ty":"u64","value":"64"}],"late":null},"idle":{"local":[{"id":"a","ty":"u32","value":"32"}],"shared":[{"id":"c","ty":"u64"}]},"tasks":[]}
+{"device":"some_dev","shared":[{"id":"c","ty":"u64"},{"id":"d","ty":"u8"}],"local":[],"init":{"local":[{"id":"a","ty":"u32","value":"32"},{"id":"b","ty":"u64","value":"64"}],"late":null},"idle":{"local":[{"id":"a","ty":"u32","value":"32"}],"shared":[{"id":"c","ty":"u64"},{"id":"d","ty":"u8"}]},"tasks":[]}
