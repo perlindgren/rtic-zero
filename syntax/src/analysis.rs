@@ -12,7 +12,7 @@ pub fn resource_ceiling(task_set: &TaskSet) -> ResourceToPriority {
             Task {
                 id: "idle".into(),
                 priority: 0,
-                binds: None,
+                binds: "".into(),
                 shared: idle.shared.clone(),
                 local: vec![],
             }

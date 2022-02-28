@@ -1,11 +1,9 @@
 #![no_std]
 
-// Backend
+// Backend, you need to select one.
 use rtic_zero_cortex_m as rtic_arch;
 // Alternative backend
 // use rtic_zero_cortex_m as rtic_arch;
-
-// use rtic_zero;
 
 // Machine generated, DO NOT TOUCH!
 pub mod rtic_zero_codegen;

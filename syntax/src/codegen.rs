@@ -227,10 +227,12 @@ fn gen_shared(shared: &Vec<Resource>, rtp: &ResourceToPriority) -> TokenStream {
     }
 }
 
-fn gen_task(task: &Task, rtp: &ResourceToPriority) -> TokenStream {
+fn gen_task(task: &Task, device: &Ident, rtp: &ResourceToPriority) -> TokenStream {
     let id = ident(&task.id);
     let shared = shared(&task.shared, rtp);
     let local = local(&task.local);
+    let interrupt = ident(&task.binds);
+    let priority = task.priority;
 
     quote! {
         pub mod #id {
@@ -246,22 +248,56 @@ fn gen_task(task: &Task, rtp: &ResourceToPriority) -> TokenStream {
             }
 
             pub fn pend() {
-                
+                rtic_arch::pend(#device::Interrupt::#interrupt)
+            }
+
+            pub unsafe fn run<'a>(priority: &'a Priority) {
+                #id(Context {
+                    local: Local::new(),
+                    shared: Shared::new(priority),
+                });
+            }
+
+            extern "Rust" {
+                fn #id(cx: Context);
+            }
+
+            #[allow(non_snake_case)]
+            #[no_mangle]
+            unsafe fn #interrupt() {
+                let priority = Priority::new(#priority);
+                run(&priority);
             }
         }
     }
 }
 
-fn gen_tasks(tasks: &Vec<Task>, rtp: &ResourceToPriority) -> TokenStream {
-    let mut t: Vec<TokenStream> = vec![];
+fn gen_tasks(task_set: &TaskSet, rtp: &ResourceToPriority) -> (TokenStream, TokenStream) {
+    let mut tasks: Vec<TokenStream> = vec![];
+    let mut interrupt_init = vec![];
 
-    for task in tasks {
-        t.push(gen_task(task, rtp));
+    let device = ident(&task_set.device);
+
+    for task in &task_set.tasks {
+        tasks.push(gen_task(task, &device, rtp));
+
+        let interrupt = ident(&task.binds);
+        let priority = task.priority;
+
+        interrupt_init.push(quote! {
+            rtic_arch::unmask(#device::Interrupt::#interrupt);
+            rtic_arch::set_priority(#device::Interrupt::#interrupt, #priority);
+        })
     }
 
-    quote! {
-        #(#t)*
-    }
+    (
+        quote! {
+            #(#tasks)*
+        },
+        quote! {
+            #(#interrupt_init)*
+        },
+    )
 }
 
 fn gen_task_set(task_set: &TaskSet, rtp: &ResourceToPriority) -> TokenStream {
@@ -271,11 +307,11 @@ fn gen_task_set(task_set: &TaskSet, rtp: &ResourceToPriority) -> TokenStream {
 
     let (idle, idle_call) = gen_idle(&task_set.idle, rtp);
 
-    let tasks = gen_tasks(&task_set.tasks, rtp);
+    let (tasks, interrupt_init) = gen_tasks(&task_set, rtp);
 
     quote! {
         #[allow(unused_imports)]
-        use crate::rtic_arch::{ResourceProxy, Resource};
+        use crate::rtic_arch::{self, ResourceProxy, Resource};
         #[allow(unused_imports)]
         use mutex::Mutex;
         #[allow(unused_imports)]
@@ -288,9 +324,16 @@ fn gen_task_set(task_set: &TaskSet, rtp: &ResourceToPriority) -> TokenStream {
         #[no_mangle]
         unsafe extern "C" fn main() -> ! {
 
-            let shared = init::run();
+            rtic_arch::interrupt_free(|_| {
 
-            resources::move_shared(shared);
+                let shared = init::run();
+
+                resources::move_shared(shared);
+
+                #interrupt_init
+
+            });
+
 
             #idle_call
 

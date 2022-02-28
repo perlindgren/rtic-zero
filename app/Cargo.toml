@@ -18,6 +18,3 @@ rtic-zero-cortex-m = { path = "../backends/rtic-zero-cortex-m" }
 
 mutex = { path = "../mutex" }
 rtic-zero = { path = "../" }
-
-[patch.crates-io]
-lm3s6965 = { git = "https://github.com/japaric/lm3s6965" }

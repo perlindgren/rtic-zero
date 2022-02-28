@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 pub struct Task {
     pub id: String,
     pub priority: u8,
-    pub binds: Option<String>,
+    pub binds: String,
     pub shared: Vec<Resource>,
     pub local: Vec<ResourceInit>,
 }
@@ -84,13 +84,22 @@ pub fn task_set() -> TaskSet {
             local: vec![rl1.clone()],
             shared: vec![rs1.clone(), rs2.clone()],
         }),
-        tasks: vec![Task {
-            id: "t1".into(),
-            priority: 1,
-            binds: Some("GPIOA".into()),
-            shared: vec![rs1.clone()],
-            local: vec![rl2.clone()],
-        }],
+        tasks: vec![
+            Task {
+                id: "t1".into(),
+                priority: 1,
+                binds: "GPIOA".into(),
+                shared: vec![rs1.clone()],
+                local: vec![rl2.clone()],
+            },
+            Task {
+                id: "t2".into(),
+                priority: 2,
+                binds: "GPIOB".into(),
+                shared: vec![rs1.clone()],
+                local: vec![rl2.clone()],
+            },
+        ],
     }
 }
 
