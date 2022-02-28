@@ -68,8 +68,8 @@ fn local(resources: &Vec<ResourceInit>) -> TokenStream {
     let (field_ty, (field_cell, field_new)): (Vec<_>, (Vec<_>, Vec<_>)) = resources
         .iter()
         .map(|ResourceInit { id, ty, value }| {
-            let id = ident(id);
             let id_internal = mangled_ident(&id);
+            let id = ident(id);
             let ty = TokenStream::from_str(ty).unwrap();
             let value = TokenStream::from_str(value).unwrap();
             (

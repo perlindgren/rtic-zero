@@ -17,7 +17,7 @@ fn init(cx: init::Context) -> Shared {
     *cx.local.a += 1;
     *cx.local.b += 1;
 
-    Shared { c: 123 }
+    Shared { c: 124 }
 }
 
 #[no_mangle]
