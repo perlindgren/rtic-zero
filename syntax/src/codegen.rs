@@ -122,14 +122,14 @@ fn gen_init(init: &Init) -> TokenStream {
                 pub local: Local<'a>,
             }
 
-            pub unsafe fn run() {
+            pub unsafe fn run() -> Shared {
                 init(Context {
                     local: Local::new(),
-                });
+                })
             }
 
             extern "Rust" {
-                fn init(cx: Context);
+                fn init(cx: Context) -> Shared;
             }
         }
     }
@@ -201,24 +201,35 @@ fn gen_task(task: &Task, rtp: &ResourceToPriority) -> TokenStream {
 }
 
 fn gen_shared(shared: &Vec<Resource>, rtp: &ResourceToPriority) -> TokenStream {
-    let field_res: Vec<_> = shared
+    let (field_res, field_struct): (Vec<_>, Vec<_>) = shared
         .iter()
         .map(|r| {
             let ceil = rtp.get(r).unwrap();
             let ceil = ts(&format!("{}", ceil));
 
             let Resource { id, ty } = r;
-            let id_internal = mangled_ident(id);
+            let id_internal = mangled_ident(&id);
+            let id = ident(&id);
             // let id = ident(id);
             let ty = ts(ty);
-            quote! {
-                #[allow(non_upper_case_globals)]
-                pub static #id_internal: Resource<#ty, #ceil> = Resource::new(0);
-            }
+            (
+                quote! {
+                    #[allow(non_upper_case_globals)]
+                    pub static #id_internal: Resource<#ty, #ceil> = Resource::new();
+                },
+                quote! {
+                    pub #id: #ty
+                },
+            )
         })
-        .collect();
+        .unzip();
 
     quote! {
+
+        pub struct Shared {
+            #(#field_struct),*
+        }
+
         mod resources {
             use super::*;
 
