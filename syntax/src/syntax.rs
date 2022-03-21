@@ -1,8 +1,5 @@
 // syntax
-
-// use proc_macro2::TokenStream;
 use serde::{Deserialize, Serialize};
-// use std::str::FromStr;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone, Hash)]
 pub struct Task {
@@ -45,61 +42,78 @@ pub struct TaskSet {
     pub local: Vec<Resource>,
     pub init: Init,
     pub idle: Option<Idle>,
-    pub tasks: Vec<Task>,
+    pub interrupts: Vec<Task>,
+    pub exceptions: Vec<Task>,
 }
 
 #[cfg(test)]
-pub fn task_set() -> TaskSet {
-    let rl1 = ResourceInit {
-        id: "a".into(),
-        ty: "u32".into(),
-        value: "32".into(),
-    };
+pub mod test {
+    use super::*;
+    pub fn task_set() -> TaskSet {
+        let rl1 = ResourceInit {
+            id: "a".into(),
+            ty: "u32".into(),
+            value: "32".into(),
+        };
 
-    let rl2 = ResourceInit {
-        id: "b".into(),
-        ty: "u64".into(),
-        value: "64".into(),
-    };
+        let rl2 = ResourceInit {
+            id: "b".into(),
+            ty: "u64".into(),
+            value: "64".into(),
+        };
 
-    let rs1 = Resource {
-        id: "c".into(),
-        ty: "u64".into(),
-    };
+        let rs1 = Resource {
+            id: "c".into(),
+            ty: "u64".into(),
+        };
 
-    let rs2 = Resource {
-        id: "d".into(),
-        ty: "u8".into(),
-    };
+        let rs2 = Resource {
+            id: "d".into(),
+            ty: "u8".into(),
+        };
 
-    TaskSet {
-        device: "lm3s6965".into(),
-        shared: vec![rs1.clone(), rs2.clone()],
-        local: vec![],
-        init: Init {
-            local: vec![rl1.clone(), rl2.clone()],
-            late: (),
-        },
-        idle: Some(Idle {
-            local: vec![rl1.clone()],
+        TaskSet {
+            device: "lm3s6965".into(),
             shared: vec![rs1.clone(), rs2.clone()],
-        }),
-        tasks: vec![
-            Task {
-                id: "t1".into(),
-                priority: 1,
-                binds: "GPIOA".into(),
-                shared: vec![rs1.clone()],
-                local: vec![rl2.clone()],
+            local: vec![],
+            init: Init {
+                local: vec![rl1.clone(), rl2.clone()],
+                late: (),
             },
-            Task {
-                id: "t2".into(),
+            idle: Some(Idle {
+                local: vec![rl1.clone()],
+                shared: vec![rs1.clone(), rs2.clone()],
+            }),
+            interrupts: vec![
+                Task {
+                    id: "t1".into(),
+                    priority: 1,
+                    binds: "GPIOA".into(),
+                    shared: vec![rs1.clone()],
+                    local: vec![rl2.clone()],
+                },
+                Task {
+                    id: "t2".into(),
+                    priority: 2,
+                    binds: "GPIOB".into(),
+                    shared: vec![rs1.clone()],
+                    local: vec![rl2.clone()],
+                },
+            ],
+            exceptions: vec![Task {
+                id: "systic".into(),
                 priority: 2,
-                binds: "GPIOB".into(),
-                shared: vec![rs1.clone()],
-                local: vec![rl2.clone()],
-            },
-        ],
+                binds: "SysTick".into(),
+                shared: vec![],
+                local: vec![],
+            }],
+        }
+    }
+
+    #[test]
+    fn test_task_set() {
+        let task_set = task_set();
+        println!("{:?}", task_set);
     }
 }
 

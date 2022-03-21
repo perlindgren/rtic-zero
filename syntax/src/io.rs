@@ -43,6 +43,7 @@ pub fn load_tasks(path: &Path) -> TaskSet {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::syntax::test::task_set;
 
     #[test]
     fn serde() {

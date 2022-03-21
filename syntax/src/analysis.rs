@@ -5,7 +5,8 @@ use std::collections::HashMap;
 pub type ResourceToPriority = HashMap<Resource, u8>;
 
 pub fn resource_ceiling(task_set: &TaskSet) -> ResourceToPriority {
-    let mut tasks = task_set.tasks.clone();
+    let mut tasks = task_set.interrupts.clone();
+    tasks.extend(task_set.exceptions.clone());
 
     if let Some(idle) = &task_set.idle {
         tasks.push({
@@ -35,8 +36,10 @@ pub fn resource_ceiling(task_set: &TaskSet) -> ResourceToPriority {
     rtp
 }
 
+#[cfg(test)]
 #[test]
 fn cielings() {
+    use crate::syntax::test::task_set;
     let task_set = task_set();
     let rtp = resource_ceiling(&task_set);
     println!("ceilings {:?}", rtp);

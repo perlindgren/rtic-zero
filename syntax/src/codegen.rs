@@ -278,11 +278,11 @@ fn gen_tasks(task_set: &TaskSet, rtp: &ResourceToPriority) -> (TokenStream, Toke
 
     let device = ident(&task_set.device);
 
-    for task in &task_set.tasks {
+    for task in &task_set.interrupts {
         tasks.push(gen_task(task, &device, rtp));
 
-        let interrupt = ident(&task.binds);
         let priority = task.priority;
+        let interrupt = ident(&task.binds);
 
         interrupt_init.push(quote! {
             rtic_arch::unmask(#device::Interrupt::#interrupt);
@@ -355,6 +355,7 @@ fn gen_task_set(task_set: &TaskSet, rtp: &ResourceToPriority) -> TokenStream {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::syntax::test::task_set;
     use std::fs::File;
     use std::io::prelude::*;
     use std::path::Path;
@@ -365,7 +366,28 @@ mod test {
         let rtp = crate::analysis::resource_ceiling(&task_set);
         let s = gen_task_set(&task_set, &rtp);
 
-        let path = Path::new("out.rs");
+        let path = Path::new("rtic.json");
+        let display = path.display();
+        let mut file = match File::create(&path) {
+            Err(why) => panic!("couldn't create {}: {}", display, why),
+            Ok(file) => file,
+        };
+
+        match file.write_all(s.to_string().as_bytes()) {
+            Err(why) => panic!("couldn't write to {}: {}", display, why),
+            Ok(_) => println!("successfully wrote to {}", display),
+        }
+    }
+
+    #[test]
+    fn test_gen_task_files() {
+        let path = Path::new("rtic.json");
+        let task_set = crate::io::load_tasks(&path);
+
+        let rtp = crate::analysis::resource_ceiling(&task_set);
+        let s = gen_task_set(&task_set, &rtp);
+
+        let path = Path::new("../app/src/rtic_zero_codegen.rs");
         let display = path.display();
         let mut file = match File::create(&path) {
             Err(why) => panic!("couldn't create {}: {}", display, why),
